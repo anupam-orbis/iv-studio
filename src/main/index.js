@@ -8,7 +8,7 @@ import { EXTRA_BIN, harnessStatus } from '../service/harness'
 import { pasteMessage, skillMarkdown, readGuide } from '../service/agent'
 import { Cloud, GPUS } from '../service/cloud'
 import { RunPod, GPUS as RUNPOD_GPUS } from '../service/runpod'
-import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launchersIn, waitUp } from '../service/comfylauncher'
+import { comfyUp, findLaunchers, isComfyFolder, isLocalUrl, launch as launchComfy, launcherFor, launchersIn, waitUp } from '../service/comfylauncher'
 import { randomBytes } from 'node:crypto'
 import { Edits, FORMATS, LOUDNESS } from '../service/edits'
 import { EditGen } from '../service/editgen'
@@ -955,15 +955,11 @@ app.whenReady().then(() => {
   handle('setup:installNodes', () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))
 
   // ---------- starting ComfyUI (comfylauncher.js) ----------
-  // The launcher is the one picked in Settings, else the best one in the ComfyUI folder picked there, else
-  // the best one found on this PC. The window hears
+  // The launcher is comfylauncher.js launcherFor: the one picked in Settings, else the best one in the ComfyUI
+  // folder picked there, else the best one found on this PC. The window hears
   // comfy:state ({state: 'starting' | 'up' | 'failed', detail}) and rechecks when ComfyUI is up.
   let comfyStarting = null
-  const launcherOf = (s) => {
-    if (s.comfyLauncher && fs.existsSync(s.comfyLauncher)) return s.comfyLauncher
-    if (s.comfyFolder && fs.existsSync(s.comfyFolder)) return launchersIn(s.comfyFolder)[0]?.path || null
-    return findLaunchers()[0]?.path || null
-  }
+  const launcherOf = launcherFor
   const startComfy = () =>
     (comfyStarting ||= (async () => {
       const s = readSettings(BASE)
@@ -1009,6 +1005,16 @@ app.whenReady().then(() => {
     return dir
   })
   handle('comfy:start', () => startComfy())
+
+  // ---------- updating ComfyUI, its node packs and ComfyUI-Manager (studio.js, comfyupdate.js) ----------
+  // The window hears setup:updates ({ phase: 'snapshot' | 'updating' | 'restoring' | 'restarting' | 'done', done, total }).
+  handle('setup:updates:check', () => studio.comfyUpdates({ launcher: launcherFor(readSettings(BASE)) }))
+  handle('setup:updates:run', () => {
+    const s = readSettings(BASE)
+    return studio.updateComfy({ folder: s.comfyFolder || null, launcher: launcherFor(s), onProgress: (u) => send('setup:updates', u) })
+  })
+  handle('setup:updates:undo', () => studio.undoComfyUpdate({ folder: readSettings(BASE).comfyFolder || null, start: startComfy, onProgress: (u) => send('setup:updates', u) }))
+  handle('setup:updates:installManager', () => studio.installManager({ folder: readSettings(BASE).comfyFolder || null, onProgress: (u) => send('setup:nodes', u) }))
   // Settings -> Agents: what to paste into an agent, and the Claude Code skill (with this install's command).
   const skillFile = path.join(app.getPath('home'), '.claude', 'skills', 'iv-studio', 'SKILL.md')
   const skillText = () => skillMarkdown(readGuide(resourcesDir(path.join(app.getAppPath(), 'resources'))), mcpCommand())

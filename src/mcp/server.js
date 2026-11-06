@@ -30,6 +30,7 @@ import { comfyFolders, contentDir, dataDir, readSettings, resourcesDir, writerOf
 import { ASPECTS, FRAME_GEN_FPS, MODES } from '../service/plan'
 import { RETAKE_MODES, SHOT_SECONDS } from '../service/sequence'
 import { Studio } from '../service/studio'
+import { launcherFor } from '../service/comfylauncher'
 import { applyOps, clipEnd, TRACK_ID, tracksOf, videoLayers } from '../service/timeline'
 import { TALKS, TRAIN_GPUS, Trainings } from '../service/training'
 import { Shinobi } from '../service/shinobi'
@@ -139,6 +140,12 @@ server.registerPrompt('start', { title: 'Start here', description: 'Choose what 
 }))
 tool('check_setup', 'Report ComfyUI, GPU, node packs, models and characters, with fixes for anything missing.', {}, () => studio.checkSetup())
 tool('install_node_packs', "Install the ComfyUI node packs check_setup reports missing into this PC's ComfyUI: IV Studio's own pack is copied, the others downloaded at the versions IV Studio is tested with (GitHub commit or Comfy Registry release) and given their requirements with ComfyUI's Python. Folders already in custom_nodes are left alone. ComfyUI must be running; restart it afterwards to load them.", {}, () => studio.installNodePacks({ folder: readSettings(BASE).comfyFolder || null }))
+tool('check_comfy_updates', "What updating this PC's ComfyUI would change, through ComfyUI-Manager: ComfyUI's version against its newest stable release, the installed custom node packs that have updates (Manager included), Manager's version and update policy, and the last update (for undo_comfy_update). Changes nothing, but Manager fetches every pack's remote first, so it takes a minute or two. manager.present false: ComfyUI-Manager isn't installed.", {}, () => studio.comfyUpdates({ launcher: launcherFor(readSettings(BASE)) }))
+tool('update_comfy', "Update this PC's ComfyUI through ComfyUI-Manager: saves a Manager snapshot, updates every custom node pack (ComfyUI-Manager included) to its newest version and ComfyUI to its newest stable release (or nightly, if Manager is set to that; the ComfyUI Desktop app updates ComfyUI itself), then restarts ComfyUI and waits for it. Refuses while ComfyUI is rendering or has jobs queued. Takes several minutes. Returns the snapshot, ComfyUI's version before and after and each pack's result; undo_comfy_update puts it all back. It changes the person's ComfyUI install: run it only when they ask.", {}, () => {
+  const s = readSettings(BASE)
+  return studio.updateComfy({ folder: s.comfyFolder || null, launcher: launcherFor(s) })
+})
+tool('undo_comfy_update', "Undo the last update_comfy (or the Setup screen's Update everything): restores the snapshot it saved and restarts ComfyUI. Afterwards it switches back on any pack ComfyUI-Manager's restore switched off (plain folders a snapshot can't track, IV Studio's own pack among them) and restarts again; reenabled lists them. If ComfyUI isn't running, the snapshot is set to restore at its next start (startNeeded: true): start ComfyUI, then call this again to finish.", {}, () => studio.undoComfyUpdate({ folder: readSettings(BASE).comfyFolder || null }))
 tool('list_characters', 'Character presets (LoRA, strength, trigger word).', {}, () => studio.characters())
 tool('list_projects', 'Projects in the IV Studio library, newest first.', {}, () => studio.listProjects())
 tool('plan_render', 'Validate a request and resolve size, frames, duration, seeds and the finished size, without rendering.', { ...request, finish: z.object(finish).partial().optional() }, ({ finish: f, ...r }) => studio.planRender(r, f || {}))

@@ -4,7 +4,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { findLaunchers, isComfyFolder, isLocalUrl, launch, launchable, launchersIn, linuxCommand } from '../src/service/comfylauncher.js'
+import { findLaunchers, isComfyFolder, isDesktopLauncher, isLocalUrl, launch, launchable, launcherFor, launchersIn, linuxCommand } from '../src/service/comfylauncher.js'
 
 let pass = 0
 let fail = 0
@@ -112,5 +112,8 @@ echo hello from comfy
 } finally {
   fs.rmSync(home, { recursive: true, force: true })
 }
+ok(isDesktopLauncher('C:/Users/x/AppData/Local/Programs/@comfyorgcomfyui-electron/ComfyUI.exe') && isDesktopLauncher('/Applications/ComfyUI.app'), 'the ComfyUI Desktop app is spotted (it updates ComfyUI itself)')
+ok(!isDesktopLauncher('F:/ComfyUI/run_nvidia_gpu.bat') && !isDesktopLauncher('C:/x/Desktop/ComfyUI.lnk') && !isDesktopLauncher(null), 'a portable .bat, a shortcut or nothing is not the Desktop app')
+ok(launcherFor({ comfyLauncher: path.join(os.tmpdir(), 'no-such-launcher.bat'), comfyFolder: path.join(os.tmpdir(), 'no-such-folder') }) === (findLaunchers()[0]?.path || null), 'a picked launcher or folder that is gone falls back to the best one found')
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Hero from './Hero'
 import { SettingsTabs } from './Settings'
 import StartComfy from './StartComfy'
+import ComfyUpdates from './ComfyUpdates'
 
 const ICON = { ok: '●', warn: '▲', missing: '✕' }
 const GROUPS = [
@@ -146,6 +147,7 @@ export default function Setup({ setup, recheck, checking, remote, go, notify }) 
             </div>
             <div className="group-body">
               {title === 'Node packs' && !remote && <NodeInstaller missing={list.filter((i) => i.status !== 'ok' && i.dir).length} recheck={recheck} notify={notify} />}
+              {title === 'ComfyUI and GPU' && !remote && list.find((i) => i.id === 'comfyui')?.status === 'ok' && <ComfyUpdates notify={notify} recheck={recheck} />}
               <ul className="checks">
                 {list.map((i) => (
                   <li key={i.id} className={i.status}>

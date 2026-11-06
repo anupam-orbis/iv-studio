@@ -192,7 +192,12 @@ contextBridge.exposeInMainWorld('ivstudio', {
     onLog: on('cloud:log')
   },
   prompts: { status: call('prompts:status'), write: call('prompts:write'), story: call('prompts:story'), pull: call('prompts:pull'), onPull: on('prompts:pull') },
-  setup: { check: call('setup:check'), installNodes: call('setup:installNodes'), onNodes: on('setup:nodes') },
+  setup: {
+    check: call('setup:check'),
+    installNodes: call('setup:installNodes'),
+    onNodes: on('setup:nodes'),
+    updates: { check: call('setup:updates:check'), run: call('setup:updates:run'), undo: call('setup:updates:undo'), installManager: call('setup:updates:installManager'), onProgress: on('setup:updates') }
+  },
   comfy: { launcher: call('comfy:launcher'), chooseLauncher: call('comfy:chooseLauncher'), chooseFolder: call('comfy:chooseFolder'), start: call('comfy:start'), onState: on('comfy:state') },
   h3Models: call('models:h3'),
   models: { status: call('models:status'), download: call('models:download'), cancel: call('models:cancel'), onUpdate: on('models:update') },

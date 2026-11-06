@@ -103,6 +103,17 @@ export function launchersIn(dir, platform = process.platform) {
     .map((name) => ({ path: path.join(dir, name), kind: 'folder', label: name }))
 }
 
+// The launcher IV Studio uses: the one picked in Settings, else the best one in the ComfyUI folder picked there,
+// else the best one found on this PC. s: IV Studio's settings ({ comfyLauncher, comfyFolder }).
+export function launcherFor(s = {}) {
+  if (s.comfyLauncher && fs.existsSync(s.comfyLauncher)) return s.comfyLauncher
+  if (s.comfyFolder && fs.existsSync(s.comfyFolder)) return launchersIn(s.comfyFolder)[0]?.path || null
+  return findLaunchers()[0]?.path || null
+}
+
+// The ComfyUI Desktop app updates ComfyUI and ComfyUI-Manager itself (comfyupdate.js updates only its node packs).
+export const isDesktopLauncher = (file) => !!file && /^ComfyUI\.(exe|app)$/i.test(path.basename(file))
+
 // Starts a launcher as a double-click would, in its own window, so ComfyUI keeps running when IV Studio
 // closes. Through PowerShell's Start-Process (the Windows shell), not as IV Studio's child: a child process
 // inherits IV Studio's open sockets and keeps them after IV Studio quits. A .bat or .exe starts in its own

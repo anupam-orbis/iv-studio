@@ -15,6 +15,8 @@ import { contextIrGraph, fromContextIr, writeHarness, writeLocal, writeStoryLoca
 import { renderOutGraph, retakeGraph, SAVES, SEQUENCE_DEFAULTS, takeGraph, validateSequence } from './sequence.js'
 import { checkSetup, comboOptions, modelFileMap } from './setup.js'
 import { comfyPlace, installPacks, missingPacks } from './nodepacks.js'
+import { checkUpdates, copySnapshot, MANAGER_PACK, packFolders, readRecord, reenable, restart, undo, update, writeRecord } from './comfyupdate.js'
+import { comfyUp, isDesktopLauncher, isLocalUrl } from './comfylauncher.js'
 
 // A new shot's name from its prompt: the first words of [Shot 1] (not "subject_definitions" or the frames line),
 // without the style opener, with {char} as the character's first name.
@@ -189,6 +191,98 @@ export class Studio {
     const place = await comfyPlace(this.comfy, folder)
     const results = await installPacks(packs, { ...place, resourcesDir: this.resourcesDir, onProgress })
     return { customNodes: place.customNodes, python: place.python, results, restart: results.some((r) => r.status === 'installed') }
+  }
+
+  // ---------- updating ComfyUI, its node packs and ComfyUI-Manager (comfyupdate.js) ----------
+  // Only a ComfyUI on this PC. launcher: the one IV Studio starts ComfyUI with (comfylauncher.js launcherFor), to tell
+  // the ComfyUI Desktop app (which updates ComfyUI and Manager itself) from the rest.
+  localOnly() {
+    if (this.comfy.remote || !isLocalUrl(this.comfy.url)) throw new Error('Updates run on this PC’s ComfyUI only.')
+  }
+
+  // A ComfyUI without ComfyUI-Manager answers { manager: { present: false } } (the window offers to install it).
+  async comfyUpdates({ launcher = null } = {}) {
+    this.localOnly()
+    const desktop = isDesktopLauncher(launcher)
+    try {
+      return { ...(await checkUpdates(this.comfy, { desktop })), last: readRecord(this.dataDir) }
+    } catch (err) {
+      if (err.code === 'missing') return { manager: { present: false, version: null, policy: null }, desktop, last: readRecord(this.dataDir) }
+      throw err
+    }
+  }
+
+  // Snapshot, update everything, restart, and record what happened for Undo. onProgress: { phase, done, total }.
+  async updateComfy({ folder = null, launcher = null, onProgress = () => {} } = {}) {
+    this.localOnly()
+    await this.beforeRender?.() // the voice engine gives its GPU back, as before a render
+    const place = await comfyPlace(this.comfy, folder)
+    const comfyRoot = path.dirname(place.customNodes)
+    const before = (await this.comfy.systemStats()).system?.comfyui_version || null
+    // the packs switched on now: Undo switches back on any that Manager's restore switches off (comfyupdate.js reenable)
+    const enabledPacks = packFolders(place.customNodes)
+    const { snapshot, results, reported } = await update(this.comfy, { desktop: isDesktopLauncher(launcher), onProgress })
+    const record = { snapshot, snapshotCopy: copySnapshot(this.dataDir, comfyRoot, snapshot), comfyRoot, customNodes: place.customNodes, enabledPacks, at: new Date().toISOString(), comfyuiBefore: before, comfyuiAfter: null, results, reported }
+    writeRecord(this.dataDir, record) // before the restart, so Undo works even if ComfyUI doesn't come back
+    onProgress({ phase: 'restarting' })
+    const { version } = await restart(this.comfy)
+    record.comfyuiAfter = version
+    // Manager says success-stable-vX for ComfyUI even when it was on vX already
+    const core = record.results.find((r) => r.pack === 'comfyui')
+    if (core?.status === 'updated' && before && before === version) Object.assign(core, { status: 'current', message: null })
+    writeRecord(this.dataDir, record)
+    await this.capabilities(true).catch(() => null)
+    onProgress({ phase: 'done' })
+    return record
+  }
+
+  // Puts the last update's snapshot back and restarts ComfyUI, then switches back on the packs Manager's restore
+  // switched off (plain folders a snapshot can't track, IV Studio's own pack among them) and restarts once more.
+  // start: starts ComfyUI with the person's launcher (the app passes its own); without it, a ComfyUI that was down
+  // reports startNeeded, and calling this again once ComfyUI is up finishes the job.
+  async undoComfyUpdate({ folder = null, start = null, onProgress = () => {} } = {}) {
+    this.localOnly()
+    const record = readRecord(this.dataDir)
+    if (!record?.snapshot) throw new Error('There’s no update to undo.')
+    const isUp = await comfyUp(this.comfy.url, 2000)
+    let comfyRoot = record.comfyRoot || null
+    if (isUp) comfyRoot = path.dirname((await comfyPlace(this.comfy, folder)).customNodes)
+    else if (!comfyRoot && folder) comfyRoot = fs.existsSync(path.join(folder, 'ComfyUI')) ? path.join(folder, 'ComfyUI') : folder
+    const customNodes = record.customNodes || (comfyRoot && path.join(comfyRoot, 'custom_nodes'))
+    // after the restore ran: switch the packs back on, restart if any moved
+    const finish = async (via) => {
+      const reenabled = customNodes ? reenable(customNodes, record.enabledPacks || []) : []
+      let version = (await this.comfy.systemStats()).system?.comfyui_version || null
+      if (reenabled.length) {
+        onProgress({ phase: 'restarting' })
+        version = (await restart(this.comfy)).version
+      }
+      writeRecord(this.dataDir, { ...record, restorePending: false, undoneAt: new Date().toISOString() })
+      await this.capabilities(true).catch(() => null)
+      onProgress({ phase: 'done' })
+      return { via, version, snapshot: record.snapshot, reenabled }
+    }
+    if (isUp && record.restorePending) return finish('file') // the restore ran when ComfyUI last started
+    onProgress({ phase: 'restoring' })
+    const { via } = await undo(this.comfy, record, { comfyRoot })
+    if (via === 'api') {
+      onProgress({ phase: 'restarting' })
+      await restart(this.comfy)
+      return finish(via)
+    }
+    writeRecord(this.dataDir, { ...record, restorePending: true })
+    if (!start) return { via, startNeeded: true, snapshot: record.snapshot }
+    onProgress({ phase: 'restarting' })
+    await start()
+    return finish(via)
+  }
+
+  // ComfyUI-Manager itself, for a ComfyUI that hasn't got it (it registers no nodes, so Setup's node check can't see it).
+  async installManager({ folder = null, onProgress } = {}) {
+    this.localOnly()
+    const place = await comfyPlace(this.comfy, folder)
+    const results = await installPacks([MANAGER_PACK], { ...place, resourcesDir: this.resourcesDir, onProgress })
+    return { results, restart: results.some((r) => r.status === 'installed') }
   }
 
   // What the connected ComfyUI can do (Linux paths, DLSS or the cloud's upscale + RIFE); cached.
