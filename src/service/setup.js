@@ -26,6 +26,13 @@ export function resolveModel(m, opts, chosen = {}) {
   return pick ? { file: pick, how: 'picked' } : null
 }
 
+// The files ComfyUI lists for a model: its loader's, and altLoader's (the latent upscaler is read by the LBH node
+// pack or, on ComfyUI 0.44+, by ComfyUI's own loader, from the same folder). null when neither loader is there.
+export function modelOptions(info, m) {
+  const lists = [m.loader, m.altLoader].filter(Boolean).map((l) => comboOptions(info, ...l.split('.'))).filter(Boolean)
+  return lists.length ? [...new Set(lists.flat())] : null
+}
+
 // IV Studio's graphs name its own builds at the top of each models folder; for every required model this ComfyUI
 // has in another version or in a subfolder, the name to use instead (Comfy.submit swaps it into every graph).
 // info needs only the models' loader nodes.
@@ -33,8 +40,7 @@ export function modelFileMap(manifest, info, chosen = {}) {
   const map = {}
   for (const m of manifest.models) {
     if (m.optional) continue
-    const [cls, input] = m.loader.split('.')
-    const opts = comboOptions(info, cls, input) || []
+    const opts = modelOptions(info, m) || []
     if (opts.includes(m.match)) continue
     const r = resolveModel(m, opts, chosen)
     if (r) map[m.match] = r.file
@@ -77,6 +83,11 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
       continue
     }
     const miss = pack.classes.filter((c) => (needed.includes(c) ? missingClasses.includes(c) : !info[c]))
+    // a pack this ComfyUI now has built in (the H3 latent upscaler, ComfyUI 0.44+): IV Studio uses ComfyUI's own nodes
+    if (miss.length && pack.builtIn?.every((c) => info[c])) {
+      items.push({ id: `pack:${pack.label}`, label: pack.label, status: 'ok', detail: `Built into this ComfyUI${stats.system?.comfyui_version ? ` (${stats.system.comfyui_version})` : ''}, so the node pack isn't needed`, kind: 'node_pack', for: pack.for, dir: pack.dir })
+      continue
+    }
     const core = pack.classes.some((c) => needed.includes(c))
     const status = !miss.length ? 'ok' : core ? 'missing' : 'warn'
     items.push({ id: `pack:${pack.label}`, label: pack.label, status, detail: miss.length ? `Missing nodes: ${miss.join(', ')}` : 'Installed', fix: miss.length ? (core ? 'Needed for every shot. Install the missing node packs above, then restart ComfyUI.' : `Needed for ${pack.for}.`) : undefined, kind: 'node_pack', for: pack.for, dir: pack.dir, url: /^https:/.test(pack.url) ? pack.url : undefined })
@@ -85,8 +96,7 @@ export async function checkSetup({ comfy, template, manifest, characters, chosen
   if (unknown.length) items.push({ id: 'pack:other', label: 'Other nodes', status: 'missing', detail: unknown.join(', '), kind: 'node_pack' })
 
   for (const m of manifest.models) {
-    const [cls, input] = m.loader.split('.')
-    const opts = comboOptions(info, cls, input) || []
+    const opts = modelOptions(info, m) || []
     // optional: only for one tool, so missing is a warning; alt/accept: other names and versions that count as present
     const r = resolveModel(m, opts, chosen)
     const found = r?.file

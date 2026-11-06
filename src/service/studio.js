@@ -156,7 +156,7 @@ export class Studio {
   // The required models this ComfyUI has in another version than IV Studio's own (setup.js modelFileMap), read
   // from just their loader nodes.
   async modelFiles() {
-    const classes = [...new Set(this.manifest.models.filter((m) => !m.optional).map((m) => m.loader.split('.')[0]))]
+    const classes = [...new Set(this.manifest.models.filter((m) => !m.optional).flatMap((m) => [m.loader, m.altLoader].filter(Boolean).map((l) => l.split('.')[0])))]
     const info = Object.assign({}, ...(await Promise.all(classes.map((c) => this.comfy.objectInfo(c).catch(() => ({}))))))
     return modelFileMap(this.manifest, info, this.models)
   }
@@ -296,7 +296,7 @@ export class Studio {
   async submitGraph({ kind, graph: built, projectId = null, sequenceId = null, plan, name, parent, previewPlan }) {
     const caps = await this.capabilities()
     // a finish SeedVR2 will enhance skips DLSS 5 (remote.js swaps its node for a plain save, as on the cloud)
-    const graph = adaptGraph(built, plan?.finish?.enhancer === 'seedvr2' ? { ...caps, dlss: false, upscale2x: false, rife: false } : caps)
+    const graph = adaptGraph(built, plan?.finish?.enhancer === 'seedvr2' ? { ...caps, dlss: false, upscale2x: false, rife: false } : caps, { upscaleSize: plan?.resolved?.upscaleSize })
     const problems = checkPrompt(graph)
     if (problems.length) throw new Error(`Internal graph error: ${problems.join('; ')}`)
     await this.makeRoom(kind)

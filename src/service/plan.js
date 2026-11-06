@@ -168,6 +168,8 @@ export function planFinish(previewPlan, finish) {
       height: Math.round((base.height * scale) / 2) * 2,
       enhancer: f.enhancer,
       ...(f.enhancer === 'seedvr2' ? { finishWidth: base.width, finishHeight: base.height } : {}),
+      // what the latent upscaler makes, before DLSS or SeedVR2 (remote.js hands it to ComfyUI's built-in upscaler)
+      ...(single ? {} : { upscaleSize: { width: base.width, height: base.height } }),
       fps: f.fps || 24,
       frames: f.fps ? Math.round((frames / 24) * f.fps) : frames,
       seconds: previewPlan.resolved.seconds,

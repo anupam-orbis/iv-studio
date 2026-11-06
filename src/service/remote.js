@@ -21,6 +21,8 @@ export function capabilities(objectInfo, systemStats) {
     rife: !!objectInfo['RIFE VFI'],
     upscale2x: !!objectInfo.DLSS5_Enhance_Video || upscalers.includes(CLOUD_UPSCALER),
     fps: objectInfo.DLSS5_Enhance_Video ? DLSS_FPS : objectInfo['RIFE VFI'] ? CLOUD_FPS : [0],
+    // ComfyUI 0.44+ has the H3 latent upscaler built in (the same LBH weights, from models/latent_upscale_models)
+    coreUpscaler: !!(objectInfo.MiniMaxH3LatentUpscaleWithModel && objectInfo.LatentUpscaleModelLoader),
     // KJNodes' per-step preview with H3's tiny VAE (models/vae_approx/taeh3.safetensors), for live previews
     livePreview: comboOptions(objectInfo.ModelPreviewOverrideKJ?.input?.optional?.tiny_vae).includes(LIVE_TAE)
   }
@@ -65,8 +67,19 @@ function resolve(g, v) {
   return i.value ?? i.int ?? i.float ?? i.number ?? i.seed
 }
 
-export function adaptGraph(graph, caps) {
+// upscaleSize: a finish's size after the latent upscale (plan.js resolved.upscaleSize). With it, on a ComfyUI that
+// has the built-in upscaler, the LBH node pack's upscaler becomes ComfyUI's own: the same model and size, faster,
+// without its memory spikes. Without it, or on an older ComfyUI, the LBH node stays.
+export function adaptGraph(graph, caps, { upscaleSize = null } = {}) {
   const g = structuredClone(graph)
+  if (caps.coreUpscaler && upscaleSize) {
+    for (const [id, node] of Object.entries(g)) {
+      if (node.class_type !== 'MinimaxH3LatentUpscaler3D') continue
+      const load = `${id}_core_load`
+      g[load] = { class_type: 'LatentUpscaleModelLoader', inputs: { model_name: node.inputs.model_name } }
+      g[id] = { class_type: 'MiniMaxH3LatentUpscaleWithModel', inputs: { model: [load, 0], samples: node.inputs.latent, width: upscaleSize.width, height: upscaleSize.height } }
+    }
+  }
   if (caps.posix) {
     for (const node of Object.values(g)) {
       for (const [k, v] of Object.entries(node.inputs)) {
