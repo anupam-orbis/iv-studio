@@ -87,7 +87,7 @@ mac_update_selftest() {
   cat "$U/feed/latest-mac.yml"
   python3 -m http.server "$PORT" --bind 127.0.0.1 --directory "$U/feed" >"$U/http.log" 2>&1 &
   HTTP=$!
-  sleep 1
+  for i in $(seq 1 30); do curl -sf "http://127.0.0.1:$PORT/latest-mac.yml" >/dev/null && break; sleep 1; done
   IV_STUDIO_UPDATE_FEED="http://127.0.0.1:$PORT" IV_STUDIO_UPDATE_SELFTEST=1 IV_STUDIO_USER_DATA="$U/userdata" IV_STUDIO_DATA="$U/data" \
     "$U/apps/IV Studio.app/Contents/MacOS/IV Studio" >"$U/app.log" 2>&1 &
   for i in $(seq 1 120); do

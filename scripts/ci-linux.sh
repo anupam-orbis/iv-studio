@@ -76,7 +76,7 @@ linux_update_selftest() {
   HTTP=$!
   Xvfb :97 -screen 0 1600x1000x24 >/dev/null 2>&1 &
   XV=$!
-  sleep 1
+  for i in $(seq 1 30); do curl -sf "http://127.0.0.1:$PORT/latest-linux.yml" >/dev/null && break; sleep 1; done
   DISPLAY=:97 IV_STUDIO_UPDATE_FEED="http://127.0.0.1:$PORT" IV_STUDIO_UPDATE_SELFTEST=1 IV_STUDIO_USER_DATA="$U/userdata" IV_STUDIO_DATA="$U/data" \
     "$U/app/IV-Studio.AppImage" --no-sandbox >"$U/app.log" 2>&1 &
   for i in $(seq 1 120); do

@@ -13,6 +13,7 @@ import path from 'node:path'
 import { RELEASES, appBundleOf, cannotReplace, checkFile, download, feedUrls, installScript, newer, parseFeed, pickFile, stage } from '../service/macupdate'
 
 const SIX_HOURS = 6 * 60 * 60 * 1000
+const RETRY = 5 * 60 * 1000 // a failed check (offline at launch, a dropped connection) tries again this soon
 const run = (cmd, args) => new Promise((resolve) => execFile(cmd, args, { maxBuffer: 4 << 20 }, (err, stdout, stderr) => resolve({ code: err ? (typeof err.code === 'number' ? err.code : 1) : 0, stdout, stderr })))
 
 export function initMacUpdater({ set, get, testFeed }) {
@@ -22,6 +23,7 @@ export function initMacUpdater({ set, get, testFeed }) {
   const bundle = appBundleOf(process.execPath)
   let staged = null // { version, app }
   let busy = null
+  let retry = null
 
   const log = (line) => {
     try {
@@ -72,6 +74,8 @@ export function initMacUpdater({ set, get, testFeed }) {
       .catch((err) => {
         log(`error: ${err.message}`)
         set({ status: 'error', error: String(err.message || err).split('\n')[0], percent: null })
+        clearTimeout(retry)
+        retry = setTimeout(check, selftest ? 3000 : RETRY)
       })
       .finally(() => (busy = null))
     await busy
