@@ -48,7 +48,11 @@ export function initUpdater(onChange) {
   autoUpdater.on('update-not-available', () => set({ status: 'current', available: null, checkedAt: new Date().toISOString() }))
   autoUpdater.on('update-available', (info) => set({ status: MANUAL ? 'available' : 'downloading', available: info.version, percent: MANUAL ? null : 0, checkedAt: new Date().toISOString() }))
   autoUpdater.on('download-progress', (p) => set({ status: 'downloading', percent: p.percent }))
-  autoUpdater.on('update-downloaded', (info) => set({ status: 'ready', available: info.version, percent: 100 }))
+  autoUpdater.on('update-downloaded', (info) => {
+    set({ status: 'ready', available: info.version, percent: 100 })
+    // the Linux CI's update check (scripts/ci-linux.sh): a test copy on a local feed installs and reopens at once
+    if (TEST_FEED && process.env.IV_STUDIO_UPDATE_SELFTEST === '1') setTimeout(() => autoUpdater.quitAndInstall(true, true), 500)
+  })
   autoUpdater.on('error', (err) => {
     const message = String(err?.message || err)
     // With no published release yet (drafts only), GitHub has no "latest" to report.
