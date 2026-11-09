@@ -1643,8 +1643,8 @@ app.whenReady().then(() => {
   handle('update:state', () => updateState())
   handle('update:check', () => updater.check())
   handle('update:install', () => {
-    // a Mac only opens the download page, which needs nothing to finish first
-    if (UPDATE_MANUAL) return updater.install()
+    // opening the download page (the portable copy, or a Mac copy that can't replace itself) needs nothing to finish first
+    if (UPDATE_MANUAL || updateState().status === 'available') return updater.install()
     const waits = busy()
     if (waits.length) throw new Error(`Restart when it's done: ${waits.join(' and ')}.`)
     return updater.install()

@@ -2,7 +2,8 @@
 # it: the app bundle and its GPL ffmpeg, the unit tests, an edit export, a real website capture and a Shinobi render
 # with Chrome, every page of the window, and the MCP server from the app.
 # The app is ad-hoc signed, not with an Apple Developer ID: macOS asks people to allow it once (System Settings ->
-# Privacy & Security -> Open Anyway), and it can't install its own updates, so it opens the download page instead.
+# Privacy & Security -> Open Anyway). macOS's own updater needs a Developer ID, so IV Studio swaps its own bundle
+# (src/main/macupdater.js); scripts/ci-mac.sh checks that end to end.
 # Run it by hand (Actions -> Mac -> Run workflow); with a release tag, the Mac files and latest-mac.yml are added to
 # that release.
 name: Mac

@@ -15,7 +15,7 @@ run() {
 }
 
 # the parts that need no GPU and no ComfyUI
-for t in cast cutout directing editgen news tours lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher comfy-busy ranking prompt-guide ollama-address nodepacks model-versions remake comfycloud image-families refmods hardware training-recipe training-runpod sampler-choice sequence-links music-remix modal-account setup-progress effects comfy-address; do
+for t in cast cutout directing editgen news tours lint productions reel screenplay sizzle-cut staging timeline-tracks private-outputs comfylauncher comfy-busy ranking prompt-guide ollama-address nodepacks model-versions remake comfycloud image-families refmods hardware training-recipe training-runpod sampler-choice sequence-links music-remix modal-account setup-progress effects comfy-address mac-update; do
   run "test-$t" node "test/$t.mjs"
 done
 run test-runpod node test/runpod.mjs python3

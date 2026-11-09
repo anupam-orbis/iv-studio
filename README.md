@@ -279,8 +279,11 @@ What's different on a Mac:
   finds and starts the ComfyUI Desktop app, `ComfyUI.app`, or a ComfyUI folder in your home folder). Note that
   the ComfyUI Desktop app listens on port 8000: set `http://127.0.0.1:8000` in Settings if you use it.
 - **Voices** run on your Mac's processor, not a GPU, so they're slow; not yet tried on a real Mac.
-- **Updates:** an unsigned Mac app can't install its own updates, so IV Studio tells you when a new version is out
-  (**↓ Get …** at the bottom of the sidebar) and opens its download page; drag the new version over the old one.
+- **Updates:** IV Studio installs its own updates on a Mac too. macOS's built-in updater needs a paid Apple
+  signature, so IV Studio downloads the new version itself, checks it against the release's checksum, swaps it in
+  when you click **Restart to update** (or quit) and opens again. That needs IV Studio in your Applications folder:
+  a copy opened straight from the `.dmg` or from Downloads says so and opens the download page instead.
+  Copies before 1.1 still open the download page once.
 - **Keys** (RunPod, Civitai, Comfy.org) are kept in the macOS Keychain.
 - **Your data** is kept in `~/Library/Application Support/IV Studio`; exported edits go to `Movies/IV Studio`.
 - **ffmpeg** in the Mac app is Martin Riedl's GPL static build of FFmpeg 9.0.2 (the npm package's Mac builds are
